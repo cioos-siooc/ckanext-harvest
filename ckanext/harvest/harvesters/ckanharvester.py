@@ -303,6 +303,11 @@ class CKANHarvester(HarvesterBase):
         if fq_terms:
             params['fq'] = ' '.join(fq_terms)
 
+        use_default_schema = self.config.get('use_default_schema', False)
+        package_type = self.config.get('force_package_type', None)
+        if use_default_schema:
+            params['use_default_schema'] = use_default_schema
+
         pkg_dicts = []
         pkg_ids = set()
         previous_content = None
@@ -345,6 +350,10 @@ class CKANHarvester(HarvesterBase):
 
             if len(pkg_dicts_page) == 0:
                 break
+
+            for p in pkg_dicts_page:
+                if p['type'] and package_type:
+                    p['type'] = package_type
 
             params['start'] = str(int(params['start']) + int(params['rows']))
 
