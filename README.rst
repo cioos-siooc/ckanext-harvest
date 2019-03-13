@@ -8,6 +8,13 @@ ckanext-harvest - Remote harvesting extension
 This extension provides a common harvesting framework for ckan extensions
 and adds a CLI and a WUI to CKAN to manage harvesting sources and jobs.
 
+CIOOS-SIOOC Changes
+===================
+* added two settings to harvester config. These settings are used to force custom schemas to be handled as if they are default schemas. aka extras are not converted to regular keys and are left in the extras array.
+```use_default_schema``` if set to true will instruct the harvested ckan instance to return records using the default schema rather then the one applied by the scheming extension. This is assuming that the harested ckan instance has not overwritten its default schema with one from scheming. If this is the case then you will get the schema defined by scheming as the default dataset schema.
+```force_package_type``` if set, will force harvested packages (records) to use this package type / schema. Will overwrite the type field, if set, in the harvested package dictionary.
+  [e5d2414](https://github.com/cioos-siooc/ckanext-spatial/commit/e5d24144134be25a8d1cbf111750ab70b44c337a)
+
 
 Installation
 ============
