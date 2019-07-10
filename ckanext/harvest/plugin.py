@@ -218,7 +218,7 @@ class Harvest(p.SingletonPlugin, DefaultDatasetForm, DefaultTranslation):
 
         # Setup harvest model
         model_setup()
-        
+
         # Configure database logger
         _configure_db_logger(config)
 
@@ -472,7 +472,7 @@ def _delete_harvest_source_object(context, data_dict):
 
 def _configure_db_logger(config):
     # Log scope
-    # 
+    #
     # -1 - do not log to the database
     #  0 - log everything
     #  1 - model, logic.action, logic.validators, harvesters
@@ -486,16 +486,16 @@ def _configure_db_logger(config):
     scope = p.toolkit.asint(config.get('ckan.harvest.log_scope', -1))
     if scope == -1:
         return
-    
+
     parent_logger = 'ckanext.harvest'
-    children = ['plugin', 'model', 'logic.action.create', 'logic.action.delete', 
-                'logic.action.get',  'logic.action.patch', 'logic.action.update', 
-                'logic.validators', 'harvesters.base', 'harvesters.ckanharvester']
-    
+    children = ['plugin', 'model', 'logic.action.create', 'logic.action.delete',
+                'logic.action.get',  'logic.action.patch', 'logic.action.update',
+                'logic.validators', 'harvesters.base', 'harvesters.ckanharvester', 'harvesters.ckanschemaharvester']
+
     children_ = {0: children, 1: children[1:], 2: children[1:-2],
                  3: children[1:-3], 4: children[2:-3], 5: children[1:2],
                  6: children[:1], 7: children[-2:]}
-    
+
     # Get log level from config param - default: DEBUG
     from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL
     level = config.get('ckan.harvest.log_level', 'debug').upper()
@@ -513,7 +513,7 @@ def _configure_db_logger(config):
         level = DEBUG
 
     loggers = children_.get(scope)
-    
+
     # Get root logger and set db handler
     logger = getLogger(parent_logger)
     if scope < 1:
