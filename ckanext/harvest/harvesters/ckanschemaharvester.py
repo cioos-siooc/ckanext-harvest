@@ -567,23 +567,20 @@ class CKANSchemaHarvester(HarvesterBase):
 
             package_dict['extras'] = extras_not_in_schema
 
-	    log.debug('author: %r, MAUF: %r, status: %r',package_dict.get('author',''), package_dict.get('maintenanceAndUpdateFrequency',''), package_dict.get('status',''))
+	    #log.debug('author: %r, MAUF: %r, status: %r',package_dict.get('author',''), package_dict.get('maintenanceAndUpdateFrequency',''), package_dict.get('status',''))
 
             if (package_dict.get('maintenanceAndUpdateFrequency','') == 'as_needed'):
                 package_dict['maintenanceAndUpdateFrequency'] = 'asNeeded'
-            if (package_dict.get('maintenanceAndUpdateFrequency','') == ''):
+            if (not package_dict.get('maintenanceAndUpdateFrequency')):
                 package_dict['maintenanceAndUpdateFrequency'] = 'asNeeded'
-            if (package_dict.get('status','') == ''):
+            if (not package_dict.get('status')):
                 package_dict['status'] = 'onGoing'
-            if (package_dict.get('notes_translated','') == ''):
-	        package_dict['notes_translated'] = json.dumps({'en': package_dict.get('notes','Not Available'), 'fr':'Not Available'})
-            author = package_dict.get('author','')
-            if (author == '' or author is None):
+            if (not package_dict.get('notes_translated')):
+	               package_dict['notes_translated'] = json.dumps({'en': package_dict.get('notes','Not Available'), 'fr':'Not Available'})
+            if (not package_dict.get('author')):
                 package_dict['author'] = json.dumps({'author_name': 'Not Available', 'author_email':'Not Available', 'author_type':'author'})
-            if (package_dict.get('MD_Scope','') == ''):
+            if (not package_dict.get('MD_Scope')):
                 package_dict['MD_Scope'] = 'dataset'
-
-            log.debug('HERE!!!!!')
 
 	    result = self._create_or_update_package(
                 package_dict, harvest_object, package_dict_form='package_show')
