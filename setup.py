@@ -33,6 +33,7 @@ setup(
             harvest=ckanext.harvest.plugin:Harvest
             ckan_harvester=ckanext.harvest.harvesters:CKANHarvester
             ckan_schema_harvester=ckanext.harvest.harvesters:CKANSchemaHarvester
+            ckan_spatial_harvester=ckanext.harvest.harvesters:CKANSpatialHarvester
         [ckan.test_plugins]
             test_harvester=ckanext.harvest.tests.test_queue:MockHarvester
             test_harvester2=ckanext.harvest.tests.test_queue2:MockHarvester
