@@ -373,6 +373,9 @@ class HarvesterBase(SingletonPlugin):
             return True
 
         except p.toolkit.ValidationError, e:
+            # call refresh() on every instance this fixes issues [151](https://github.com/ckan/ckanext-harvest/issues/151) and [262](https://github.com/ckan/ckanext-harvest/issues/262)
+            for s in iter(model.Session):
+                model.Session.refresh(s)
             log.exception(e)
             self._save_object_error('Invalid package with GUID %s: %r' % (harvest_object.guid, e.error_dict),
                                     harvest_object, 'Import')
