@@ -3,6 +3,7 @@ import urllib2
 import httplib
 import datetime
 import socket
+import os
 
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
@@ -160,10 +161,24 @@ class CKANSpatialHarvester(HarvesterBase):
                 raise ValueError('Harvest configuration cannot contain both '
                                  'groups_filter_include and groups_filter_exclude')
 
+            if 'spatial_filter_file' in config_obj:
+                contents = None
+                try:
+
+                    f = open(config_obj['spatial_filter_file'], "r")
+                    contents = f.read()
+                except Exception as e:
+                    raise ValueError('Spatial Filter File not found or not readable: %s. Current directory: %s' % (e, os.getcwd()))
+
+                if contents and not validate_polygon(contents):
+                    raise ValueError('Spatial Filter File contents is invalid, '
+                                     'expected POLYGON or MULTIPOLYGON WKT of the '
+                                     'form "MULTIPOLYGON(((-133.4 54.0, -125.6 53.0, ...)))"')
+
             if 'spatial_filter' in config_obj \
                 and not validate_polygon(config_obj['spatial_filter']):
                 raise ValueError('spatial_filter is invalid, expected POLYGON '
-                                 'or MULTIPOLYGON WKT')
+                                 'or MULTIPOLYGON WKT of the form "MULTIPOLYGON(((-133.4 54.0, -125.6 53.0, ...)))"')
 
             if 'user' in config_obj:
                 # Check if user exists
@@ -334,7 +349,12 @@ class CKANSpatialHarvester(HarvesterBase):
         # ss_params['poly'] = 'POLYGON((-128.17701209 51.62096599, -127.92157996 51.62096599, -127.92157996 51.73507366, -128.17701209 51.73507366, -128.17701209 51.62096599))'
         # ss_params['poly'] = 'BOX(-129,51,-127,52)'
         ss_params = {}
-        spatial_filter_wkt = self.config.get('spatial_filter', None)
+        spatial_filter_file = self.config.get('spatial_filter_file', None)
+        if spatial_filter_file:
+            f = open(spatial_filter_file, "r")
+            spatial_filter_wkt = f.read()
+        else:
+            spatial_filter_wkt = self.config.get('spatial_filter', None)
         if spatial_filter_wkt.startswith(('POLYGON', 'MULTIPOLYGON')):
             ss_params['poly'] = spatial_filter_wkt
         if spatial_filter_wkt.startswith('BOX'):
@@ -342,6 +362,7 @@ class CKANSpatialHarvester(HarvesterBase):
         ss_params['crs'] = self.config.get('spatial_crs', 4326)
         spatial_id_list = []
         if spatial_filter_wkt:
+            log.debug('Performing spatial search with wkt geomitry: "%s"', spatial_filter_wkt)
             spatial_search_url = remote_ckan_base_url + '/api/2/search/dataset/geo' '?' + urllib.urlencode(ss_params)
             try:
                 ss_content = self._get_content(spatial_search_url)
