@@ -161,6 +161,11 @@ class CKANSpatialHarvester(HarvesterBase):
                 raise ValueError('Harvest configuration cannot contain both '
                                  'groups_filter_include and groups_filter_exclude')
 
+            if 'field_filter_include' in config_obj \
+                    and 'field_filter_exclude' in config_obj:
+                raise ValueError('Harvest configuration cannot contain both '
+                                 'field_filter_include and field_filter_exclude')
+                
             if 'spatial_filter_file' in config_obj:
                 contents = None
                 try:
@@ -230,6 +235,16 @@ class CKANSpatialHarvester(HarvesterBase):
             fq_terms.extend(
                 '-groups:%s' % group_name for group_name in groups_filter_exclude)
 
+        field_filter_include = self.config.get('field_filter_include', [])
+        field_filter_exclude = self.config.get('field_filter_exclude', [])
+        if field_filter_include:
+            fq_terms.append(' OR '.join(
+                '%s:%s' % (item['field'], item['value']) for item in field_filter_include
+            ))
+        elif field_filter_exclude:
+            fq_terms.extend(
+                '-%s:%s' % (item['field'], item['value']) for item in field_filter_exclude
+            )
         # Ideally we can request from the remote CKAN only those datasets
         # modified since the last completely successful harvest.
         last_error_free_job = self.last_error_free_job(harvest_job)
