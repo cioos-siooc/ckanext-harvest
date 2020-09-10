@@ -630,8 +630,6 @@ class CKANSchemaHarvester(HarvesterBase):
                     [{'type': x.get('type'), 'value': x.get('date')}
                      for x in package_dict.get('dates')])
 
-            log.debug("package_dict:%r", package_dict)
-
             result = self._create_or_update_package(
                 package_dict, harvest_object, package_dict_form='package_show')
 
