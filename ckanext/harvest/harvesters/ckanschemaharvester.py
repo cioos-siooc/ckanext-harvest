@@ -7,17 +7,13 @@ import socket
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
-from ckan.lib.munge import munge_name
 from ckan.plugins import toolkit
-
 from ckanext.scheming.helpers import (scheming_get_dataset_schema)
-
 from ckanext.harvest.model import HarvestObject
+from base import HarvesterBase
 
 import logging
 log = logging.getLogger(__name__)
-
-from base import HarvesterBase
 
 
 class CKANSchemaHarvester(HarvesterBase):
@@ -100,7 +96,7 @@ class CKANSchemaHarvester(HarvesterBase):
             'title': 'CKAN Schema',
             'description': 'Harvests remote CKAN instances without matching schema',
             'form_config_interface': 'Text'
-        }
+            }
 
     def validate_config(self, config):
         if not config:
@@ -152,9 +148,15 @@ class CKANSchemaHarvester(HarvesterBase):
                     raise ValueError('default_extras must be a dictionary')
 
             if 'organizations_filter_include' in config_obj \
-                and 'organizations_filter_exclude' in config_obj:
+                    and 'organizations_filter_exclude' in config_obj:
                 raise ValueError('Harvest configuration cannot contain both '
-                    'organizations_filter_include and organizations_filter_exclude')
+                                 'organizations_filter_include and '
+                                 'organizations_filter_exclude')
+
+            if 'groups_filter_include' in config_obj \
+                    and 'groups_filter_exclude' in config_obj:
+                raise ValueError('Harvest configuration cannot contain both '
+                                 'groups_filter_include and groups_filter_exclude')
 
             if 'user' in config_obj:
                 # Check if user exists
@@ -196,6 +198,15 @@ class CKANSchemaHarvester(HarvesterBase):
         elif org_filter_exclude:
             fq_terms.extend(
                 '-organization:%s' % org_name for org_name in org_filter_exclude)
+
+        groups_filter_include = self.config.get('groups_filter_include', [])
+        groups_filter_exclude = self.config.get('groups_filter_exclude', [])
+        if groups_filter_include:
+            fq_terms.append(' OR '.join(
+                'groups:%s' % group_name for group_name in groups_filter_include))
+        elif groups_filter_exclude:
+            fq_terms.extend(
+                '-groups:%s' % group_name for group_name in groups_filter_exclude)
 
         # Ideally we can request from the remote CKAN only those datasets
         # modified since the last completely successful harvest.
@@ -393,17 +404,17 @@ class CKANSchemaHarvester(HarvesterBase):
             # Set default tags if needed
             default_tags = self.config.get('default_tags', [])
             if default_tags:
-                if not 'tags' in package_dict:
+                if 'tags' not in package_dict:
                     package_dict['tags'] = []
                 package_dict['tags'].extend(
                     [t for t in default_tags if t not in package_dict['tags']])
 
             remote_groups = self.config.get('remote_groups', None)
-            if not remote_groups in ('only_local', 'create'):
+            if remote_groups not in ('only_local', 'create'):
                 # Ignore remote groups
                 package_dict.pop('groups', None)
             else:
-                if not 'groups' in package_dict:
+                if 'groups' not in package_dict:
                     package_dict['groups'] = []
 
                 # check if remote groups exist locally, otherwise remove
@@ -451,11 +462,11 @@ class CKANSchemaHarvester(HarvesterBase):
 
             remote_orgs = self.config.get('remote_orgs', None)
 
-            if not remote_orgs in ('only_local', 'create'):
+            if remote_orgs not in ('only_local', 'create'):
                 # Assign dataset to the source organization
                 package_dict['owner_org'] = local_org
             else:
-                if not 'owner_org' in package_dict:
+                if 'owner_org' not in package_dict:
                     package_dict['owner_org'] = None
 
                 # check if remote org exist locally, otherwise remove
@@ -491,7 +502,7 @@ class CKANSchemaHarvester(HarvesterBase):
             # Set default groups if needed
             default_groups = self.config.get('default_groups', [])
             if default_groups:
-                if not 'groups' in package_dict:
+                if 'groups' not in package_dict:
                     package_dict['groups'] = []
                 existing_group_ids = [g['id'] for g in package_dict['groups']]
                 package_dict['groups'].extend(
@@ -500,13 +511,14 @@ class CKANSchemaHarvester(HarvesterBase):
 
             # Set default extras if needed
             default_extras = self.config.get('default_extras', {})
+
             def get_extra(key, package_dict):
                 for extra in package_dict.get('extras', []):
                     if extra['key'] == key:
                         return extra
             if default_extras:
                 override_extras = self.config.get('override_extras', False)
-                if not 'extras' in package_dict:
+                if 'extras' not in package_dict:
                     package_dict['extras'] = []
                 for key, value in default_extras.iteritems():
                     existing_extra = get_extra(key, package_dict)
@@ -518,10 +530,8 @@ class CKANSchemaHarvester(HarvesterBase):
                     if isinstance(value, basestring):
                         value = value.format(
                             harvest_source_id=harvest_object.job.source.id,
-                            harvest_source_url=
-                            harvest_object.job.source.url.strip('/'),
-                            harvest_source_title=
-                            harvest_object.job.source.title,
+                            harvest_source_url=harvest_object.job.source.url.strip('/'),
+                            harvest_source_title=harvest_object.job.source.title,
                             harvest_job_id=harvest_object.job.id,
                             harvest_object_id=harvest_object.id,
                             dataset_id=package_dict['id'])
@@ -539,7 +549,7 @@ class CKANSchemaHarvester(HarvesterBase):
                 # key.
                 resource.pop('revision_id', None)
 
-            schema = scheming_get_dataset_schema('dataset','false')
+            schema = scheming_get_dataset_schema('dataset', 'false')
             map_schema_fields = map(lambda x: x['field_name'], schema['dataset_fields'])
             schema_field_names = set(map_schema_fields)
             extras_not_in_schema = []
@@ -547,42 +557,82 @@ class CKANSchemaHarvester(HarvesterBase):
                 if (extra['key'] in schema_field_names):
                     package_dict[extra['key']] = extra['value']
                 else:
-                   extras_not_in_schema.append(extra)
+                    extras_not_in_schema.append(extra)
 
-                if (extra['key'] == 'metadata-language'):
-                    lang = extra['value']
-                    if (lang in ('en','eng','EN','ENG')):
-                        package_dict['defaultLocale'] = 'EN'
-                    if (lang in ('fr','frn','FR','FRN')):
-                        package_dict['defaultLocale'] = 'FR'
+                # if (extra['key'] == 'metadata-language'):
+                #     lang = extra['value']
+                #     if (lang in ('en','eng','EN','ENG')):
+                #         package_dict['metadata-language'] = 'EN'
+                #     if (lang in ('fr','frn','FR','FRN')):
+                #         package_dict['metadata-language'] = 'FR'
 
                 if (extra['key'] == 'responsible-party'):
-                    package_dict['CI_ResponsibleParty'] = extra['value']
+                    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
+                if (extra['key'] == 'contacts'):
+                    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
 
-                if (extra['key'] == 'frequency-of-update'):
-                    package_dict['maintenanceAndUpdateFrequency'] = extra['value']
-
-                if (extra['key'] == 'resource-type'):
-                    package_dict['MD_Scope'] = extra['value']
+                #
+                # if (extra['key'] == 'frequency-of-update'):
+                #     package_dict['frequency-of-update'] = extra['value']
+                #
+                # if (extra['key'] == 'resource-type'):
+                #     package_dict['resource-type'] = extra['value']
 
             package_dict['extras'] = extras_not_in_schema
 
-	    #log.debug('author: %r, MAUF: %r, status: %r',package_dict.get('author',''), package_dict.get('maintenanceAndUpdateFrequency',''), package_dict.get('status',''))
+            package_type = self.config.get('force_package_type', package_dict.get('type', package_dict.get('resource-type', )))
 
-            if (package_dict.get('maintenanceAndUpdateFrequency','') == 'as_needed'):
-                package_dict['maintenanceAndUpdateFrequency'] = 'asNeeded'
-            if (not package_dict.get('maintenanceAndUpdateFrequency')):
-                package_dict['maintenanceAndUpdateFrequency'] = 'asNeeded'
-            if (not package_dict.get('status')):
-                package_dict['status'] = 'onGoing'
-            if (not package_dict.get('notes_translated')):
-	               package_dict['notes_translated'] = json.dumps({'en': package_dict.get('notes','Not Available'), 'fr':'Not Available'})
-            if (not package_dict.get('author')):
-                package_dict['author'] = json.dumps({'author_name': 'Not Available', 'author_email':'Not Available', 'author_type':'author'})
-            if (not package_dict.get('MD_Scope')):
-                package_dict['MD_Scope'] = 'dataset'
+            if not package_dict.get('resource-type'):
+                package_dict['resource-type'] = package_type
 
-	    result = self._create_or_update_package(
+            if not package_dict.get('metadata-language'):
+                package_dict['metadata-language'] = package_dict.get('metadata_language', 'en')[0:2]
+
+            if not package_dict.get('xml_location_url'):
+                package_dict['xml_location_url'] = harvest_object.job.source.url.strip('/')
+
+            if not package_dict.get('title_translated'):
+                package_dict['title_translated'] = {'en': package_dict.get('title', 'Not Available'),
+                                                    'fr': package_dict.get('title', 'Not Available')}
+
+            if not package_dict.get('notes_translated'):
+                package_dict['notes_translated'] = {'en': package_dict.get('notes', 'Not Available'),
+                                                    'fr': package_dict.get('notes', 'Not Available')}
+
+            if not package_dict.get('keywords'):
+                package_dict['keywords'] = {'en': [x.get('name', 'display_name') for x in package_dict.get('tags')],
+                                            'fr': [x.get('name', 'display_name') for x in package_dict.get('tags')]}
+
+            if not package_dict.get('cited-responsible-party'):
+                package_dict['cited-responsible-party'] = json.dumps([
+                    {'individual-name': x.get('name'),
+                     'contact-info_email': x.get('email'),
+                     'role': x.get('role')
+                     } for x in package_dict.get('contacts', [])
+                    ])
+
+            if not package_dict.get('metadata-point-of-contact'):
+                package_dict['metadata-point-of-contact'] = json.dumps(
+                    [x for x in json.loads(package_dict.get('cited-responsible-party', []))
+                     if x.get('role') == 'pointOfContact'])
+
+            if not package_dict.get('frequency-of-update'):
+                package_dict['frequency-of-update'] = 'unknown'
+
+            if not package_dict.get('progress'):
+                package_dict['progress'] = package_dict.get('resource_status', 'onGoing')
+
+            if not package_dict.get('eov'):
+                package_dict['eov'] = 'other'
+
+            if not package_dict.get('dataset-reference-date'):
+                package_dict['dataset-reference-date'] = json.dumps(
+                    [{'type': x.get('type'), 'value': x.get('date')}
+                     for x in package_dict.get('dates')])
+
+            log.debug("package_dict:%r", package_dict)
+
+            result = self._create_or_update_package(
                 package_dict, harvest_object, package_dict_form='package_show')
 
             return result
@@ -597,8 +647,10 @@ class CKANSchemaHarvester(HarvesterBase):
 class ContentFetchError(Exception):
     pass
 
+
 class ContentNotFoundError(ContentFetchError):
     pass
+
 
 class RemoteResourceError(Exception):
     pass
