@@ -586,7 +586,7 @@ class CKANSchemaHarvester(HarvesterBase):
                 package_dict['resource-type'] = package_type
 
             if not package_dict.get('metadata-language'):
-                package_dict['metadata-language'] = package_dict.get('metadata_language', 'en')[0:2]
+                package_dict['metadata-language'] = package_dict.get('metadata_language', 'en')[0:2].lower()
 
             if not package_dict.get('xml_location_url'):
                 package_dict['xml_location_url'] = harvest_object.job.source.url.strip('/')
