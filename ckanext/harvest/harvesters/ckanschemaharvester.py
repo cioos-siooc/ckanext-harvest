@@ -566,10 +566,10 @@ class CKANSchemaHarvester(HarvesterBase):
                 #     if (lang in ('fr','frn','FR','FRN')):
                 #         package_dict['metadata-language'] = 'FR'
 
-                if (extra['key'] == 'responsible-party'):
-                    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
-                if (extra['key'] == 'contacts'):
-                    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
+                #if (extra['key'] == 'responsible-party'):
+                #    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
+                #if (extra['key'] == 'contacts'):
+                #    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
 
                 #
                 # if (extra['key'] == 'frequency-of-update'):
@@ -628,17 +628,19 @@ class CKANSchemaHarvester(HarvesterBase):
             if not package_dict.get('dataset-reference-date'):
                 package_dict['dataset-reference-date'] = json.dumps(
                     [{'type': x.get('type'), 'value': x.get('date')}
-                     for x in package_dict.get('dates')])
+                     for x in package_dict.get('dates', [])])
 
             result = self._create_or_update_package(
                 package_dict, harvest_object, package_dict_form='package_show')
 
             return result
         except ValidationError, e:
+            log.exception(e)
             self._save_object_error('Invalid package with GUID %s: %r' %
                                     (harvest_object.guid, e.error_dict),
                                     harvest_object, 'Import')
         except Exception, e:
+            log.exception(e)
             self._save_object_error('%s' % e, harvest_object, 'Import')
 
 
