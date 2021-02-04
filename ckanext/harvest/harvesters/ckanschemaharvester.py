@@ -40,18 +40,18 @@ class CKANSchemaHarvester(HarvesterBase):
 
         try:
             http_response = urllib2.urlopen(http_request)
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             if e.getcode() == 404:
                 raise ContentNotFoundError('HTTP error: %s' % e.code)
             else:
                 raise ContentFetchError('HTTP error: %s' % e.code)
-        except urllib2.URLError, e:
+        except urllib2.URLError as e:
             raise ContentFetchError('URL error: %s' % e.reason)
-        except httplib.HTTPException, e:
+        except httplib.HTTPException as e:
             raise ContentFetchError('HTTP Exception: %s' % e)
-        except socket.error, e:
+        except socket.error as e:
             raise ContentFetchError('HTTP socket error: %s' % e)
-        except Exception, e:
+        except Exception as e:
             raise ContentFetchError('HTTP general exception: %s' % e)
         return http_response.read()
 
@@ -125,7 +125,7 @@ class CKANSchemaHarvester(HarvesterBase):
                                      ' names/ids')
                 if config_obj['default_groups'] and \
                         not isinstance(config_obj['default_groups'][0],
-                                       basestring):
+                                       str):
                     raise ValueError('default_groups must be a list of group '
                                      'names/ids (i.e. strings)')
 
@@ -139,7 +139,7 @@ class CKANSchemaHarvester(HarvesterBase):
                         # save the dict to the config object, as we'll need it
                         # in the import_stage of every dataset
                         config_obj['default_group_dicts'].append(group)
-                    except NotFound, e:
+                    except NotFound as e:
                         raise ValueError('Default group not found')
                 config = json.dumps(config_obj)
 
@@ -172,7 +172,7 @@ class CKANSchemaHarvester(HarvesterBase):
                     if not isinstance(config_obj[key], bool):
                         raise ValueError('%s must be boolean' % key)
 
-        except ValueError, e:
+        except ValueError as e:
             raise e
 
         return config
@@ -233,7 +233,7 @@ class CKANSchemaHarvester(HarvesterBase):
                 pkg_dicts = self._search_for_datasets(
                     remote_ckan_base_url,
                     fq_terms + [fq_since_last_time])
-            except SearchError, e:
+            except SearchError as e:
                 log.info('Searching for datasets changed since last time '
                          'gave an error: %s', e)
                 get_all_packages = True
@@ -250,7 +250,7 @@ class CKANSchemaHarvester(HarvesterBase):
             try:
                 pkg_dicts = self._search_for_datasets(remote_ckan_base_url,
                                                       fq_terms)
-            except SearchError, e:
+            except SearchError as e:
                 log.info('Searching for all datasets gave an error: %s', e)
                 self._save_gather_error(
                     'Unable to search remote CKAN for datasets:%s url:%s'
@@ -285,7 +285,7 @@ class CKANSchemaHarvester(HarvesterBase):
                 object_ids.append(obj.id)
 
             return object_ids
-        except Exception, e:
+        except Exception as e:
             self._save_gather_error('%r' % e.message, harvest_job)
 
     def _search_for_datasets(self, remote_ckan_base_url, fq_terms=None):
@@ -329,7 +329,7 @@ class CKANSchemaHarvester(HarvesterBase):
             log.debug('Searching for CKAN datasets: %s', url)
             try:
                 content = self._get_content(url)
-            except ContentFetchError, e:
+            except ContentFetchError as e:
                 raise SearchError(
                     'Error sending request to search remote '
                     'CKAN instance %s using URL %r. Error: %s' %
@@ -429,7 +429,7 @@ class CKANSchemaHarvester(HarvesterBase):
                             else:
                                 raise NotFound
 
-                        except NotFound, e:
+                        except NotFound as e:
                             if 'name' in group_:
                                 data_dict = {'id': group_['name']}
                                 group = get_action('group_show')(base_context.copy(), data_dict)
@@ -438,7 +438,7 @@ class CKANSchemaHarvester(HarvesterBase):
                         # Found local group
                         validated_groups.append({'id': group['id'], 'name': group['name']})
 
-                    except NotFound, e:
+                    except NotFound as e:
                         log.info('Group %s is not available', group_)
                         if remote_groups == 'create':
                             try:
@@ -478,7 +478,7 @@ class CKANSchemaHarvester(HarvesterBase):
                         data_dict = {'id': remote_org}
                         org = get_action('organization_show')(base_context.copy(), data_dict)
                         validated_org = org['id']
-                    except NotFound, e:
+                    except NotFound as e:
                         log.info('Organization %s is not available', remote_org)
                         if remote_orgs == 'create':
                             try:
@@ -527,7 +527,7 @@ class CKANSchemaHarvester(HarvesterBase):
                     if existing_extra:
                         package_dict['extras'].remove(existing_extra)
                     # Look for replacement strings
-                    if isinstance(value, basestring):
+                    if isinstance(value, str):
                         value = value.format(
                             harvest_source_id=harvest_object.job.source.id,
                             harvest_source_url=harvest_object.job.source.url.strip('/'),
@@ -634,12 +634,12 @@ class CKANSchemaHarvester(HarvesterBase):
                 package_dict, harvest_object, package_dict_form='package_show')
 
             return result
-        except ValidationError, e:
+        except ValidationError as e:
             log.exception(e)
             self._save_object_error('Invalid package with GUID %s: %r' %
                                     (harvest_object.guid, e.error_dict),
                                     harvest_object, 'Import')
-        except Exception, e:
+        except Exception as e:
             log.exception(e)
             self._save_object_error('%s' % e, harvest_object, 'Import')
 
