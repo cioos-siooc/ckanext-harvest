@@ -4,6 +4,7 @@ import httplib
 import datetime
 import socket
 import os
+import re
 
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
@@ -46,7 +47,7 @@ def _validate_polygon(poly_wkt):
     regex_multipoly = "^MULTIPOLYGON\\(\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*(?:\\)\\),\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*)*\\)\\)\\)"
     regex_box = "^BOX\\(-?\\d+\\.?\\d*,-?\\d+\\.?\\d*,-?\\d+\\.?\\d*,-?\\d+\\.?\\d*\\)"
 
-    if not isinstance(poly_wkt, basestring):
+    if not isinstance(poly_wkt, str):
         return None
 
     foundPoly = re.match(regex_poly, poly_wkt, re.IGNORECASE)
