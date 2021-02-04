@@ -28,35 +28,36 @@ class CKANSpatialHarvester(HarvesterBase):
 
     api_version = 2
     action_api_version = 3
-# copied from ckanext-spatial to remove dependency on another extentsion
-def _validate_polygon(poly_wkt):
-    '''
-    Ensures a polygon or multipolygon is expressed in well known text.
+    
+    # copied from ckanext-spatial to remove dependency on another extentsion
+    def _validate_polygon(poly_wkt):
+        '''
+        Ensures a polygon or multipolygon is expressed in well known text.
 
-    poly_wkt may be:
-           a polygon string: "POLYGON((x1 y1,x2 y2, ....))"
-           or a multipolygon string: "MULTIPOLYGON(((x1 y1,x2 y2, ....)),((x1 y1,x2 y2, ....)))"
-           or a box string: "BOX(minx,miny,maxx,maxy)"
-    and returns the same WKT or none if the validation failed
+        poly_wkt may be:
+               a polygon string: "POLYGON((x1 y1,x2 y2, ....))"
+               or a multipolygon string: "MULTIPOLYGON(((x1 y1,x2 y2, ....)),((x1 y1,x2 y2, ....)))"
+               or a box string: "BOX(minx,miny,maxx,maxy)"
+        and returns the same WKT or none if the validation failed
 
-    Note that multipolygon internal rings are not supported. external rings only.
-      This "MULTIPOLYGON(((...)),((...)))" is valid but "MULTIPOLYGON(((...)),(...))" is not
-    '''
+        Note that multipolygon internal rings are not supported. external rings only.
+          This "MULTIPOLYGON(((...)),((...)))" is valid but "MULTIPOLYGON(((...)),(...))" is not
+        '''
 
-    regex_poly = "^POLYGON\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*\\)\\)"
-    regex_multipoly = "^MULTIPOLYGON\\(\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*(?:\\)\\),\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*)*\\)\\)\\)"
-    regex_box = "^BOX\\(-?\\d+\\.?\\d*,-?\\d+\\.?\\d*,-?\\d+\\.?\\d*,-?\\d+\\.?\\d*\\)"
+        regex_poly = "^POLYGON\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*\\)\\)"
+        regex_multipoly = "^MULTIPOLYGON\\(\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*(?:\\)\\),\\(\\(-?\\d+\\.?\\d* -?\\d+\\.?\\d*(?:, -?\\d+\\.?\\d* -?\\d+\\.?\\d*)*)*\\)\\)\\)"
+        regex_box = "^BOX\\(-?\\d+\\.?\\d*,-?\\d+\\.?\\d*,-?\\d+\\.?\\d*,-?\\d+\\.?\\d*\\)"
 
-    if not isinstance(poly_wkt, str):
-        return None
+        if not isinstance(poly_wkt, str):
+            return None
 
-    foundPoly = re.match(regex_poly, poly_wkt, re.IGNORECASE)
-    foundMultiPoly = re.match(regex_multipoly, poly_wkt, re.IGNORECASE)
-    foundBox = re.match(regex_box, poly_wkt, re.IGNORECASE)
-    if not foundPoly and not foundMultiPoly and not foundBox:
-        return None
+        foundPoly = re.match(regex_poly, poly_wkt, re.IGNORECASE)
+        foundMultiPoly = re.match(regex_multipoly, poly_wkt, re.IGNORECASE)
+        foundBox = re.match(regex_box, poly_wkt, re.IGNORECASE)
+        if not foundPoly and not foundMultiPoly and not foundBox:
+            return None
 
-    return poly_wkt
+        return poly_wkt
 
     def _get_action_api_offset(self):
         return '/api/%d/action' % self.action_api_version
