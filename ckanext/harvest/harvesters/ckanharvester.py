@@ -385,7 +385,7 @@ class CKANHarvester(HarvesterBase):
                 break
 
             for p in pkg_dicts_page:
-                if p['type'] and package_type:
+                if p.get('type') and package_type:
                     p['type'] = package_type
 
             params['start'] = str(int(params['start']) + int(params['rows']))
