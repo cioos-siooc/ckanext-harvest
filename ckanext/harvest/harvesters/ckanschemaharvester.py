@@ -8,7 +8,6 @@ from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
 from ckan.plugins import toolkit
-from ckanext.scheming.helpers import (scheming_get_dataset_schema)
 from ckanext.harvest.model import HarvestObject
 from base import HarvesterBase
 
@@ -549,7 +548,7 @@ class CKANSchemaHarvester(HarvesterBase):
                 # key.
                 resource.pop('revision_id', None)
 
-            schema = scheming_get_dataset_schema('dataset', 'false')
+            schema = toolkit.h.scheming_get_dataset_schema('dataset', 'false')
             map_schema_fields = map(lambda x: x['field_name'], schema['dataset_fields'])
             schema_field_names = set(map_schema_fields)
             extras_not_in_schema = []
