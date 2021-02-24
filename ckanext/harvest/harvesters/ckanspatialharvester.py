@@ -28,7 +28,7 @@ class CKANSpatialHarvester(HarvesterBase):
 
     api_version = 2
     action_api_version = 3
-    
+
     # copied from ckanext-spatial to remove dependency on another extentsion
     def _validate_polygon(poly_wkt):
         '''
@@ -205,13 +205,13 @@ class CKANSpatialHarvester(HarvesterBase):
                 except Exception as e:
                     raise ValueError('Spatial Filter File not found or not readable: %s. Current directory: %s' % (e, os.getcwd()))
 
-                if contents and not _validate_polygon(contents):
+                if contents and not self._validate_polygon(contents):
                     raise ValueError('Spatial Filter File contents is invalid, '
                                      'expected POLYGON or MULTIPOLYGON WKT of the '
                                      'form "MULTIPOLYGON(((-133.4 54.0, -125.6 53.0, ...)))"')
 
             if 'spatial_filter' in config_obj \
-                and not _validate_polygon(config_obj['spatial_filter']):
+                and not self._validate_polygon(config_obj['spatial_filter']):
                 raise ValueError('spatial_filter is invalid, expected POLYGON '
                                  'or MULTIPOLYGON WKT of the form "MULTIPOLYGON(((-133.4 54.0, -125.6 53.0, ...)))"')
 
