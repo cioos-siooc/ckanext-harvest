@@ -552,30 +552,12 @@ class CKANSchemaHarvester(HarvesterBase):
             map_schema_fields = map(lambda x: x['field_name'], schema['dataset_fields'])
             schema_field_names = set(map_schema_fields)
             extras_not_in_schema = []
+
             for extra in package_dict.get('extras', []):
                 if (extra['key'] in schema_field_names):
                     package_dict[extra['key']] = extra['value']
                 else:
                     extras_not_in_schema.append(extra)
-
-                # if (extra['key'] == 'metadata-language'):
-                #     lang = extra['value']
-                #     if (lang in ('en','eng','EN','ENG')):
-                #         package_dict['metadata-language'] = 'EN'
-                #     if (lang in ('fr','frn','FR','FRN')):
-                #         package_dict['metadata-language'] = 'FR'
-
-                #if (extra['key'] == 'responsible-party'):
-                #    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
-                #if (extra['key'] == 'contacts'):
-                #    package_dict['cited-responsible-party'] = json.dumps(extra['value'])
-
-                #
-                # if (extra['key'] == 'frequency-of-update'):
-                #     package_dict['frequency-of-update'] = extra['value']
-                #
-                # if (extra['key'] == 'resource-type'):
-                #     package_dict['resource-type'] = extra['value']
 
             package_dict['extras'] = extras_not_in_schema
 
@@ -603,12 +585,19 @@ class CKANSchemaHarvester(HarvesterBase):
                                             'fr': [x.get('name', 'display_name') for x in package_dict.get('tags')]}
 
             if not package_dict.get('cited-responsible-party'):
-                package_dict['cited-responsible-party'] = json.dumps([
-                    {'individual-name': x.get('name'),
-                     'contact-info_email': x.get('email'),
-                     'role': x.get('role')
-                     } for x in package_dict.get('contacts', [])
-                    ])
+                crp = []
+                for x in package_dict.get('contacts', []):
+                    org = {}
+                    if x.get('organization'):
+                        org = self._get_organization(harvest_object.source.url, x.get('organization'))
+                    crp.append(
+                        {'individual-name': x.get('name'),
+                          'organisation-name': org.get('title'),
+                          'contact-info_email': x.get('email'),
+                          'role': x.get('role')
+                        }
+                    )
+                package_dict['cited-responsible-party'] = json.dumps(crp)
 
             if not package_dict.get('metadata-point-of-contact'):
                 package_dict['metadata-point-of-contact'] = json.dumps(
@@ -628,6 +617,11 @@ class CKANSchemaHarvester(HarvesterBase):
                 package_dict['dataset-reference-date'] = json.dumps(
                     [{'type': x.get('type'), 'value': x.get('date')}
                      for x in package_dict.get('dates', [])])
+
+            license_mapping = self.config.get('license_mapping',{})
+            license_id = package_dict.get('license_id')
+            if license_mapping and license_id:
+                package_dict['license_id'] = license_mapping.get(license_id, license_id)
 
             result = self._create_or_update_package(
                 package_dict, harvest_object, package_dict_form='package_show')
