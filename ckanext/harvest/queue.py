@@ -70,7 +70,6 @@ def get_connection_redis():
         return redis.Redis.from_url(
             config['ckan.redis.url'],
             decode_responses=True,
-            encoding='utf-8',
         )
     else:
         return redis.Redis(
@@ -79,7 +78,6 @@ def get_connection_redis():
             password=config.get('ckan.harvest.mq.password', None),
             db=int(config.get('ckan.harvest.mq.redis_db', REDIS_DB)),
             decode_responses=True,
-            encoding='utf-8',
         )
 
 
@@ -465,7 +463,7 @@ def fetch_callback(channel, method, header, body):
         channel.basic_ack(method.delivery_tag)
         return False
 
-    # check if job has been set to finished 
+    # check if job has been set to finished
     job = HarvestJob.get(obj.harvest_job_id)
     if job.status == 'Finished':
         obj.state = "ERROR"
