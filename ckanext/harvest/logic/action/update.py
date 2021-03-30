@@ -130,11 +130,29 @@ def harvest_source_clear(context, data_dict):
             ids.append(row[0])
         related_ids = "('" + "','".join(ids) + "')"
 
+    sql = '''SELECT hobj.package_id,
+                    hobj.harvest_source_id,
+                    hsource.title as harvest_source_title
+          FROM public.harvest_object as hobj
+          JOIN public.harvest_source as hsource on hobj.harvest_source_id = hsource.id
+          where package_id in (select package_id from harvest_object
+                    where harvest_source_id = '{harvest_source_id}')
+            AND harvest_source_id != '{harvest_source_id}';'''.format(
+        harvest_source_id=harvest_source_id)
+    result = model.Session.execute(sql)
+    ids = []
+    ref_pkgs = []
+    for row in result:
+        ids.append(row[0])
+        ref_pkgs.append('Dataset: "%s" Harvester: %s (%s)' % (row[0], row[2], row[1]))
+    referenced_package_ids = "('" + "','".join(ids) + "')"
+
     sql = '''begin;
         update package set state = 'to_delete' where id in (
             select package_id from harvest_object
-            where harvest_source_id = '{harvest_source_id}');'''.format(
-        harvest_source_id=harvest_source_id)
+            where harvest_source_id = '{harvest_source_id}')
+            AND id not in {referenced_package_ids};'''.format(
+        harvest_source_id=harvest_source_id, referenced_package_ids=referenced_package_ids)
 
     # CKAN-2.3 or above: delete resource views, resource revisions & resources
     if toolkit.check_ckan_version(min_version='2.3'):
@@ -230,7 +248,7 @@ def harvest_source_clear(context, data_dict):
     # Refresh the index for this source to update the status object
     get_action('harvest_source_reindex')(context, {'id': harvest_source_id})
 
-    return {'id': harvest_source_id}
+    return {'id': harvest_source_id, 'ref_pkgs': ref_pkgs}
 
 
 def harvest_abort_failed_jobs(context, data_dict):

@@ -676,7 +676,14 @@ def refresh_view(id):
 def clear_view(id):
     try:
         context = {'model': model, 'user': tk.c.user, 'session': model.Session}
-        tk.get_action('harvest_source_clear')(context, {'id': id})
+        res = tk.get_action('harvest_source_clear')(context, {'id': id})
+        msgs = res.get('ref_pkgs')
+        if msgs:
+            msg = 'The following datasets were not deleted as they are referenced by another harvester. ' \
+                'To remove these datasets please clear the listed harvester(s) as well.\n'
+            msg += ',\n'.join(msgs)
+            log.warn(msg)
+            h.flash_notice(msg)
         h.flash_success(_('Harvest source cleared'))
     except tk.ObjectNotFound:
         return tk.abort(404, _('Harvest source not found'))
