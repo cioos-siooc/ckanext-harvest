@@ -269,7 +269,7 @@ class HarvestObjectError(HarvestDomainObject):
             err.save()
         finally:
             if isinstance(message, str):
-                name = unicode(message, 'utf-8', 'replace')
+                name = str(message, 'utf-8', 'replace')
             log_message = u'{0}, line {1}'.format(message, line) \
                           if line else message
             log.debug(log_message)

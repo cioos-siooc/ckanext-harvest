@@ -1,15 +1,13 @@
-import urllib
-import urllib2
-import httplib
+import requests
 import datetime
-import socket
+from urllib3.contrib import pyopenssl
 
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
 from ckan.plugins import toolkit
 from ckanext.harvest.model import HarvestObject
-from base import HarvesterBase
+from .base import HarvesterBase
 
 import logging
 log = logging.getLogger(__name__)
@@ -30,29 +28,32 @@ class CKANSchemaHarvester(HarvesterBase):
     def _get_search_api_offset(self):
         return '%s/package_search' % self._get_action_api_offset()
 
-    def _get_content(self, url):
-        http_request = urllib2.Request(url=url)
-
+    def _get_content(self, url, params={}):
+        headers = {}
         api_key = self.config.get('api_key')
         if api_key:
-            http_request.add_header('Authorization', api_key)
+            headers['Authorization'] = api_key
+
+        pyopenssl.inject_into_urllib3()
 
         try:
-            http_response = urllib2.urlopen(http_request)
-        except urllib2.HTTPError as e:
+            http_response = requests.get(url, headers = headers, params = params)
+            http_response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
             if e.getcode() == 404:
                 raise ContentNotFoundError('HTTP error: %s' % e.code)
             else:
                 raise ContentFetchError('HTTP error: %s' % e.code)
-        except urllib2.URLError as e:
-            raise ContentFetchError('URL error: %s' % e.reason)
-        except httplib.HTTPException as e:
-            raise ContentFetchError('HTTP Exception: %s' % e)
-        except socket.error as e:
-            raise ContentFetchError('HTTP socket error: %s' % e)
+        except requests.exceptions.Timeout as e:
+            raise ContentFetchError('HTTP timeout: %s' % e.code)
+        except requests.exceptions.TooManyRedirects as e:
+            raise ContentFetchError('HTTP too many redirects: %s' % e.code)
+        except requests.exceptions.RequestException as e:
+            raise ContentFetchError('HTTP request exception: %s' % e.code)
         except Exception as e:
             raise ContentFetchError('HTTP general exception: %s' % e)
-        return http_response.read()
+        return http_response.text
+
 
     def _get_group(self, base_url, group):
         url = base_url + self._get_action_api_offset() + '/group_show?id=' + \
@@ -324,10 +325,10 @@ class CKANSchemaHarvester(HarvesterBase):
         pkg_ids = set()
         previous_content = None
         while True:
-            url = base_search_url + '?' + urllib.urlencode(params)
+            url = base_search_url
             log.debug('Searching for CKAN datasets: %s', url)
             try:
-                content = self._get_content(url)
+                content = self._get_content(url, params)
             except ContentFetchError as e:
                 raise SearchError(
                     'Error sending request to search remote '

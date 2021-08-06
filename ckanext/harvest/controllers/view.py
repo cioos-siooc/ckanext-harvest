@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from ckan.lib.base import BaseController, c
-from ckan.common import response
+from ckantoolkit import response
 
 import ckanext.harvest.utils as utils
 
