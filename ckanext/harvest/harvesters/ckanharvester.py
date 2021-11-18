@@ -10,9 +10,11 @@ from six.moves.urllib.parse import urlencode
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
+from ckanext.harvest import helpers as harvest_helpers
 from ckan.plugins import toolkit
 
 from ckanext.harvest.model import HarvestObject
+from ckanext.harvest.model import HarvestObjectExtra as HOExtra
 from .base import HarvesterBase
 
 import logging
@@ -186,6 +188,16 @@ class CKANHarvester(HarvesterBase):
         '''
         return package_dict
 
+    def _get_object_extra(self, harvest_object, key):
+        '''
+        Helper function for retrieving the value from a harvest object extra,
+        given the key
+        '''
+        for extra in harvest_object.extras:
+            if extra.key == key:
+                return extra.value
+        return None
+
     def gather_stage(self, harvest_job):
         log.debug('In CKANHarvester gather_stage (%s)',
                   harvest_job.source.url)
@@ -265,6 +277,7 @@ class CKANHarvester(HarvesterBase):
                 return []
 
         # Fall-back option - request all the datasets from the remote CKAN
+        to_delete_pkg = []
         if get_all_packages:
             # Request all remote packages
             try:
@@ -277,6 +290,16 @@ class CKANHarvester(HarvesterBase):
                     'terms:%s' % (e, remote_ckan_base_url, fq_terms),
                     harvest_job)
                 return None
+
+            all_remote_pkg_ids = set([x['id'] for x in pkg_dicts])
+            # get all local packages for this harvest source
+            all_local_source_pkg = harvest_helpers.all_packages_for_source(harvest_job.source.id)
+            all_local_source_pkg_ids = set([x['id'] for x in all_local_source_pkg])
+            # id's of packages no longer available on remote
+            to_delete_id = all_local_source_pkg_ids - all_remote_pkg_ids
+            # packages no longer available on remote
+            to_delete_pkg = [x for x in all_local_source_pkg if x['id'] in to_delete_id]
+
         if not pkg_dicts:
             self._save_gather_error(
                 'No datasets found at CKAN: %s' % remote_ckan_base_url,
@@ -287,6 +310,27 @@ class CKANHarvester(HarvesterBase):
         try:
             package_ids = set()
             object_ids = []
+
+            # delete missing datasets
+            for pkg_dict in to_delete_pkg:
+                if pkg_dict['id'] in package_ids:
+                    log.info('Discarding duplicate dataset %s - probably due '
+                             'to datasets being changed at the same time as '
+                             'when the harvester was paging through',
+                             pkg_dict['id'])
+                    continue
+                package_ids.add(pkg_dict['id'])
+
+                log.debug('Creating HarvestObject for %s %s with status "delete"',
+                          pkg_dict['name'], pkg_dict['id'])
+                obj = HarvestObject(guid=pkg_dict['id'],
+                                    extras=[HOExtra(key='status', value='delete')],
+                                    job=harvest_job,
+                                    content=json.dumps(pkg_dict))
+                obj.save()
+                object_ids.append(obj.id)
+
+            # process rest of datasets
             for pkg_dict in pkg_dicts:
                 if pkg_dict['id'] in package_ids:
                     log.info('Discarding duplicate dataset %s - probably due '
@@ -419,6 +463,18 @@ class CKANHarvester(HarvesterBase):
 
             if package_dict.get('type') == 'harvest':
                 log.warn('Remote dataset is a harvest source, ignoring...')
+                return True
+
+            status = self._get_object_extra(harvest_object, 'status')
+            if status == 'delete':
+                # Delete package
+                context = base_context.copy()
+                context.update({
+                    'ignore_auth': True,
+                })
+                get_action('package_delete')(context, {'id': package_dict['id']})
+                log.info('Deleted package {0}'.format(package_dict['id']))
+
                 return True
 
             # Set default tags if needed

@@ -82,6 +82,34 @@ def package_list_for_source(source_id):
     return out
 
 
+def all_packages_for_source(source_id):
+    '''
+    Creates a dataset list with all the ones belonging to a particular harvest
+    source.
+
+    Returns array of package dictionaries
+    '''
+    limit = 1000
+    page = 1
+    fq = '+harvest_source_id:"{0}"'.format(source_id)
+    search_dict = {
+        'fq': fq,
+        'rows': limit,
+        'sort': 'metadata_modified desc',
+        'start': (page - 1) * limit,
+    }
+
+    context = {'model': model, 'session': model.Session}
+    out = []
+    query = logic.get_action('package_search')(context, search_dict)
+
+    while query['results']:
+        out = out + query['results']
+        search_dict['start'] = search_dict['start'] + limit
+        query = logic.get_action('package_search')(context, search_dict)
+
+    return out
+
 def package_count_for_source(source_id):
     '''
     Returns the current package count for datasets associated with the given
