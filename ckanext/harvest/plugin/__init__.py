@@ -287,6 +287,7 @@ class Harvest(MixinPlugin, p.SingletonPlugin, DefaultDatasetForm, DefaultTransla
     def get_helpers(self):
         from ckanext.harvest import helpers as harvest_helpers
         return {
+                'all_packages_for_source': harvest_helpers.all_packages_for_source,
                 'package_list_for_source': harvest_helpers.package_list_for_source,
                 'package_count_for_source': harvest_helpers.package_count_for_source,
                 'harvesters_info': harvest_helpers.harvesters_info,
