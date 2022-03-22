@@ -188,6 +188,13 @@ class CKANHarvester(HarvesterBase):
         '''
         return package_dict
 
+    def modify_search(self, pkg_dicts, remote_ckan_base_url, fq_terms):
+        '''
+            Allow custom harvesters to modify the list of packages
+            returned by the search function
+        '''
+        return pkg_dicts
+
     def _get_object_extra(self, harvest_object, key):
         '''
         Helper function for retrieving the value from a harvest object extra,
@@ -433,6 +440,8 @@ class CKANHarvester(HarvesterBase):
                     p['type'] = package_type
 
             params['start'] = str(int(params['start']) + int(params['rows']))
+
+        pkg_dicts = self.modify_search(pkg_dicts, remote_ckan_base_url, fq_terms)
 
         return pkg_dicts
 
