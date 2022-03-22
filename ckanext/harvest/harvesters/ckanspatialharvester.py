@@ -1,12 +1,16 @@
+from __future__ import absolute_import
+import six
 import requests
+from requests.exceptions import HTTPError, RequestException
+
 import datetime
 from urllib3.contrib import pyopenssl
 import os
 import re
+from six.moves.urllib.parse import urlencode
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
-from ckan.lib.munge import munge_name
 from ckan.plugins import toolkit
 
 from ckanext.harvest.model import HarvestObject
@@ -14,8 +18,6 @@ from .base import HarvesterBase
 
 import logging
 log = logging.getLogger(__name__)
-
-
 
 
 class CKANSpatialHarvester(HarvesterBase):
@@ -28,7 +30,7 @@ class CKANSpatialHarvester(HarvesterBase):
     action_api_version = 3
 
     # copied from ckanext-spatial to remove dependency on another extentsion
-    def _validate_polygon(poly_wkt):
+    def _validate_polygon(self, poly_wkt):
         '''
         Ensures a polygon or multipolygon is expressed in well known text.
 
@@ -63,7 +65,8 @@ class CKANSpatialHarvester(HarvesterBase):
     def _get_search_api_offset(self):
         return '%s/package_search' % self._get_action_api_offset()
 
-    def _get_content(self, url, params={}):
+    def _get_content(self, url):
+
         headers = {}
         api_key = self.config.get('api_key')
         if api_key:
@@ -72,22 +75,14 @@ class CKANSpatialHarvester(HarvesterBase):
         pyopenssl.inject_into_urllib3()
 
         try:
-            http_response = requests.get(url, headers = headers, params = params)
-            http_response.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            if e.getcode() == 404:
-                raise ContentNotFoundError('HTTP error: %s' % e.code)
-            else:
-                raise ContentFetchError('HTTP error: %s' % e.code)
-        except requests.exceptions.Timeout as e:
-            raise ContentFetchError('HTTP timeout: %s' % e.code)
-        except requests.exceptions.TooManyRedirects as e:
-            raise ContentFetchError('HTTP too many redirects: %s' % e.code)
-        except requests.exceptions.RequestException as e:
-            raise ContentFetchError('HTTP request exception: %s' % e.code)
+            http_request = requests.get(url, headers=headers)
+        except HTTPError as e:
+            raise ContentFetchError('HTTP error: %s %s' % (e.response.status_code, e.request.url))
+        except RequestException as e:
+            raise ContentFetchError('Request error: %s' % e)
         except Exception as e:
             raise ContentFetchError('HTTP general exception: %s' % e)
-        return http_response.text
+        return http_request.text
 
     def _get_group(self, base_url, group):
         url = base_url + self._get_action_api_offset() + '/group_show?id=' + \
@@ -159,7 +154,7 @@ class CKANSpatialHarvester(HarvesterBase):
                                      ' names/ids')
                 if config_obj['default_groups'] and \
                         not isinstance(config_obj['default_groups'][0],
-                                       str):
+                                       six.string_types):
                     raise ValueError('default_groups must be a list of group '
                                      'names/ids (i.e. strings)')
 
@@ -173,7 +168,7 @@ class CKANSpatialHarvester(HarvesterBase):
                         # save the dict to the config object, as we'll need it
                         # in the import_stage of every dataset
                         config_obj['default_group_dicts'].append(group)
-                    except NotFound as e:
+                    except NotFound:
                         raise ValueError('Default group not found')
                 config = json.dumps(config_obj)
 
@@ -219,7 +214,7 @@ class CKANSpatialHarvester(HarvesterBase):
                 # Check if user exists
                 context = {'model': model, 'user': toolkit.c.user}
                 try:
-                    user = get_action('user_show')(
+                    get_action('user_show')(
                         context, {'id': config_obj.get('user')})
                 except NotFound:
                     raise ValueError('User not found')
@@ -233,6 +228,58 @@ class CKANSpatialHarvester(HarvesterBase):
             raise e
 
         return config
+
+    def modify_package_dict(self, package_dict, harvest_object):
+        '''
+            Allows custom harvesters to modify the package dict before
+            creating or updating the actual package.
+        '''
+        return package_dict
+
+    def modify_search(self, pkg_dicts, remote_ckan_base_url, fq_terms):
+        # ss_params['poly'] = 'MULTIPOLYGON(((-133.4529876709 54.022521972656, -125.6746673584 53.099670410156, -120.8406829834 47.430725097656, -123.9168548584 45.585021972656, -127.0369720459 47.167053222656, -128.1356048584 50.155334472656, -131.5633392334 48.924865722656, -132.5740814209 51.429748535156, -133.4529876709 54.022521972656)))'
+        # ss_params['poly'] = 'POLYGON((-128.17701209 51.62096599, -127.92157996 51.62096599, -127.92157996 51.73507366, -128.17701209 51.73507366, -128.17701209 51.62096599))'
+        # ss_params['poly'] = 'BOX(-129,51,-127,52)'
+        ss_params = {}
+        spatial_filter_file = self.config.get('spatial_filter_file', None)
+        if spatial_filter_file:
+            f = open(spatial_filter_file, "r")
+            spatial_filter_wkt = f.read()
+        else:
+            spatial_filter_wkt = self.config.get('spatial_filter', None)
+        if spatial_filter_wkt.startswith(('POLYGON', 'MULTIPOLYGON')):
+            ss_params['poly'] = spatial_filter_wkt
+        if spatial_filter_wkt.startswith('BOX'):
+            ss_params['bbox'] = spatial_filter_wkt[4:-1]
+        ss_params['crs'] = self.config.get('spatial_crs', 4326)
+        spatial_id_list = []
+        if spatial_filter_wkt:
+            log.debug('Performing spatial search with wkt geomitry: "%s"', spatial_filter_wkt)
+            spatial_search_url = remote_ckan_base_url + '/api/2/search/dataset/geo'
+            try:
+                ss_content = self._get_content(spatial_search_url, ss_params)
+                log.debug(ss_content)
+            except ContentFetchError as e:
+                raise SearchError(
+                    'Error sending request to spatial search remote '
+                    'CKAN instance %s using URL %r. Error: %s' %
+                    (remote_ckan_base_url, spatial_search_url, e))
+            try:
+                ss_response_dict = json.loads(ss_content)
+            except ValueError:
+                raise SearchError('Spatial Search response from remote CKAN was not JSON: %r'
+                                  % ss_content)
+            try:
+                spatial_id_list = ss_response_dict.get('results', [])
+            except ValueError:
+                raise SearchError('Response JSON did not contain '
+                                  'results list: %r' % ss_response_dict)
+
+        # Filter out packages not found by spatial search
+        pkg_dicts = [p for p in pkg_dicts
+                          if p['id'] in spatial_id_list]
+
+        return pkg_dicts
 
     def gather_stage(self, harvest_job):
         log.debug('In CKANHarvester gather_stage (%s)',
@@ -275,6 +322,7 @@ class CKANSpatialHarvester(HarvesterBase):
             fq_terms.extend(
                 '-%s:%s' % (item['field'], item['value']) for item in field_filter_exclude
             )
+
         # Ideally we can request from the remote CKAN only those datasets
         # modified since the last completely successful harvest.
         last_error_free_job = self.last_error_free_job(harvest_job)
@@ -383,59 +431,19 @@ class CKANSpatialHarvester(HarvesterBase):
         if fq_terms:
             params['fq'] = ' '.join(fq_terms)
 
-        log.debug(fq_terms)
-        log.debug(params)
-
         use_default_schema = self.config.get('use_default_schema', False)
         package_type = self.config.get('force_package_type', None)
         if use_default_schema:
             params['use_default_schema'] = use_default_schema
-        # ss_params['poly'] = 'MULTIPOLYGON(((-133.4529876709 54.022521972656, -125.6746673584 53.099670410156, -120.8406829834 47.430725097656, -123.9168548584 45.585021972656, -127.0369720459 47.167053222656, -128.1356048584 50.155334472656, -131.5633392334 48.924865722656, -132.5740814209 51.429748535156, -133.4529876709 54.022521972656)))'
-        # ss_params['poly'] = 'POLYGON((-128.17701209 51.62096599, -127.92157996 51.62096599, -127.92157996 51.73507366, -128.17701209 51.73507366, -128.17701209 51.62096599))'
-        # ss_params['poly'] = 'BOX(-129,51,-127,52)'
-        ss_params = {}
-        spatial_filter_file = self.config.get('spatial_filter_file', None)
-        if spatial_filter_file:
-            f = open(spatial_filter_file, "r")
-            spatial_filter_wkt = f.read()
-        else:
-            spatial_filter_wkt = self.config.get('spatial_filter', None)
-        if spatial_filter_wkt.startswith(('POLYGON', 'MULTIPOLYGON')):
-            ss_params['poly'] = spatial_filter_wkt
-        if spatial_filter_wkt.startswith('BOX'):
-            ss_params['bbox'] = spatial_filter_wkt[4:-1]
-        ss_params['crs'] = self.config.get('spatial_crs', 4326)
-        spatial_id_list = []
-        if spatial_filter_wkt:
-            log.debug('Performing spatial search with wkt geomitry: "%s"', spatial_filter_wkt)
-            spatial_search_url = remote_ckan_base_url + '/api/2/search/dataset/geo'
-            try:
-                ss_content = self._get_content(spatial_search_url, ss_params)
-                log.debug(ss_content)
-            except ContentFetchError as e:
-                raise SearchError(
-                    'Error sending request to spatial search remote '
-                    'CKAN instance %s using URL %r. Error: %s' %
-                    (remote_ckan_base_url, spatial_search_url, e))
-            try:
-                ss_response_dict = json.loads(ss_content)
-            except ValueError:
-                raise SearchError('Spatial Search response from remote CKAN was not JSON: %r'
-                                  % ss_content)
-            try:
-                spatial_id_list = ss_response_dict.get('results', [])
-            except ValueError:
-                raise SearchError('Response JSON did not contain '
-                                  'results list: %r' % ss_response_dict)
 
         pkg_dicts = []
         pkg_ids = set()
         previous_content = None
         while True:
-            url = base_search_url
+            url = base_search_url + '?' + urlencode(params)
             log.debug('Searching for CKAN datasets: %s', url)
             try:
-                content = self._get_content(url, params)
+                content = self._get_content(url)
             except ContentFetchError as e:
                 raise SearchError(
                     'Error sending request to search remote '
@@ -466,20 +474,18 @@ class CKANSpatialHarvester(HarvesterBase):
                                   if p['id'] not in duplicate_ids]
             pkg_ids |= ids_in_page
 
-            # Filter out packages not found by spatial search
-            pkg_dicts_page = [p for p in pkg_dicts_page
-                              if p['id'] in spatial_id_list]
-
             pkg_dicts.extend(pkg_dicts_page)
 
             if len(pkg_dicts_page) == 0:
                 break
 
             for p in pkg_dicts_page:
-                if p['type'] and package_type:
+                if p.get('type') and package_type:
                     p['type'] = package_type
 
             params['start'] = str(int(params['start']) + int(params['rows']))
+
+        pkg_dicts = self.modify_search(pkg_dicts, remote_ckan_base_url, fq_terms)
 
         return pkg_dicts
 
@@ -515,17 +521,17 @@ class CKANSpatialHarvester(HarvesterBase):
             # Set default tags if needed
             default_tags = self.config.get('default_tags', [])
             if default_tags:
-                if not 'tags' in package_dict:
+                if 'tags' not in package_dict:
                     package_dict['tags'] = []
                 package_dict['tags'].extend(
                     [t for t in default_tags if t not in package_dict['tags']])
 
             remote_groups = self.config.get('remote_groups', None)
-            if not remote_groups in ('only_local', 'create'):
+            if remote_groups not in ('only_local', 'create'):
                 # Ignore remote groups
                 package_dict.pop('groups', None)
             else:
-                if not 'groups' in package_dict:
+                if 'groups' not in package_dict:
                     package_dict['groups'] = []
 
                 # check if remote groups exist locally, otherwise remove
@@ -540,7 +546,7 @@ class CKANSpatialHarvester(HarvesterBase):
                             else:
                                 raise NotFound
 
-                        except NotFound as e:
+                        except NotFound:
                             if 'name' in group_:
                                 data_dict = {'id': group_['name']}
                                 group = get_action('group_show')(base_context.copy(), data_dict)
@@ -549,7 +555,7 @@ class CKANSpatialHarvester(HarvesterBase):
                         # Found local group
                         validated_groups.append({'id': group['id'], 'name': group['name']})
 
-                    except NotFound as e:
+                    except NotFound:
                         log.info('Group %s is not available', group_)
                         if remote_groups == 'create':
                             try:
@@ -573,11 +579,11 @@ class CKANSpatialHarvester(HarvesterBase):
 
             remote_orgs = self.config.get('remote_orgs', None)
 
-            if not remote_orgs in ('only_local', 'create'):
+            if remote_orgs not in ('only_local', 'create'):
                 # Assign dataset to the source organization
                 package_dict['owner_org'] = local_org
             else:
-                if not 'owner_org' in package_dict:
+                if 'owner_org' not in package_dict:
                     package_dict['owner_org'] = None
 
                 # check if remote org exist locally, otherwise remove
@@ -589,7 +595,7 @@ class CKANSpatialHarvester(HarvesterBase):
                         data_dict = {'id': remote_org}
                         org = get_action('organization_show')(base_context.copy(), data_dict)
                         validated_org = org['id']
-                    except NotFound as e:
+                    except NotFound:
                         log.info('Organization %s is not available', remote_org)
                         if remote_orgs == 'create':
                             try:
@@ -600,7 +606,8 @@ class CKANSpatialHarvester(HarvesterBase):
                                     # this especially targets older versions of CKAN
                                     org = self._get_group(harvest_object.source.url, remote_org)
 
-                                for key in ['packages', 'created', 'users', 'groups', 'tags', 'extras', 'display_name', 'type']:
+                                for key in ['packages', 'created', 'users', 'groups', 'tags',
+                                            'extras', 'display_name', 'type']:
                                     org.pop(key, None)
                                 get_action('organization_create')(base_context.copy(), org)
                                 log.info('Organization %s has been newly created', remote_org)
@@ -613,7 +620,7 @@ class CKANSpatialHarvester(HarvesterBase):
             # Set default groups if needed
             default_groups = self.config.get('default_groups', [])
             if default_groups:
-                if not 'groups' in package_dict:
+                if 'groups' not in package_dict:
                     package_dict['groups'] = []
                 existing_group_ids = [g['id'] for g in package_dict['groups']]
                 package_dict['groups'].extend(
@@ -622,28 +629,27 @@ class CKANSpatialHarvester(HarvesterBase):
 
             # Set default extras if needed
             default_extras = self.config.get('default_extras', {})
+
             def get_extra(key, package_dict):
                 for extra in package_dict.get('extras', []):
                     if extra['key'] == key:
                         return extra
             if default_extras:
                 override_extras = self.config.get('override_extras', False)
-                if not 'extras' in package_dict:
+                if 'extras' not in package_dict:
                     package_dict['extras'] = []
-                for key, value in default_extras.iteritems():
+                for key, value in default_extras.items():
                     existing_extra = get_extra(key, package_dict)
                     if existing_extra and not override_extras:
                         continue  # no need for the default
                     if existing_extra:
                         package_dict['extras'].remove(existing_extra)
                     # Look for replacement strings
-                    if isinstance(value, str):
+                    if isinstance(value, six.string_types):
                         value = value.format(
                             harvest_source_id=harvest_object.job.source.id,
-                            harvest_source_url=
-                            harvest_object.job.source.url.strip('/'),
-                            harvest_source_title=
-                            harvest_object.job.source.title,
+                            harvest_source_url=harvest_object.job.source.url.strip('/'),
+                            harvest_source_title=harvest_object.job.source.title,
                             harvest_job_id=harvest_object.job.id,
                             harvest_object_id=harvest_object.id,
                             dataset_id=package_dict['id'])
@@ -661,6 +667,8 @@ class CKANSpatialHarvester(HarvesterBase):
                 # key.
                 resource.pop('revision_id', None)
 
+            package_dict = self.modify_package_dict(package_dict, harvest_object)
+
             result = self._create_or_update_package(
                 package_dict, harvest_object, package_dict_form='package_show')
 
@@ -676,8 +684,10 @@ class CKANSpatialHarvester(HarvesterBase):
 class ContentFetchError(Exception):
     pass
 
+
 class ContentNotFoundError(ContentFetchError):
     pass
+
 
 class RemoteResourceError(Exception):
     pass
