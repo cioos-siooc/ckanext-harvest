@@ -36,7 +36,7 @@ class CKANHarvester(HarvesterBase):
     def _get_search_api_offset(self):
         return '%s/package_search' % self._get_action_api_offset()
 
-    def _get_content(self, url):
+    def _get_content(self, url, params={}):
 
         headers = {}
         api_key = self.config.get('api_key')
@@ -46,7 +46,7 @@ class CKANHarvester(HarvesterBase):
         pyopenssl.inject_into_urllib3()
 
         try:
-            http_request = requests.get(url, headers=headers)
+            http_request = requests.get(url, headers=headers, params = params)
         except HTTPError as e:
             raise ContentFetchError('HTTP error: %s %s' % (e.response.status_code, e.request.url))
         except RequestException as e:
