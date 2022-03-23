@@ -10,6 +10,7 @@ from six.moves.urllib.parse import urlencode
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
+from ckan.lib.search import SearchError
 from ckanext.harvest import helpers as harvest_helpers
 from ckan.plugins import toolkit
 
@@ -46,7 +47,7 @@ class CKANHarvester(HarvesterBase):
         pyopenssl.inject_into_urllib3()
 
         try:
-            http_request = requests.get(url, headers=headers, params = params)
+            http_request = requests.get(url, headers=headers, params=params)
         except HTTPError as e:
             raise ContentFetchError('HTTP error: %s %s' % (e.response.status_code, e.request.url))
         except RequestException as e:
@@ -658,8 +659,4 @@ class ContentNotFoundError(ContentFetchError):
 
 
 class RemoteResourceError(Exception):
-    pass
-
-
-class SearchError(Exception):
     pass
