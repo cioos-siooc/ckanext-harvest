@@ -10,6 +10,7 @@ from six.moves.urllib.parse import urlencode
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
+from ckan.lib.search import SearchError
 from ckanext.harvest import helpers as harvest_helpers
 from ckan.plugins import toolkit
 
@@ -36,7 +37,7 @@ class CKANHarvester(HarvesterBase):
     def _get_search_api_offset(self):
         return '%s/package_search' % self._get_action_api_offset()
 
-    def _get_content(self, url):
+    def _get_content(self, url, params={}):
 
         headers = {}
         api_key = self.config.get('api_key')
@@ -46,7 +47,7 @@ class CKANHarvester(HarvesterBase):
         pyopenssl.inject_into_urllib3()
 
         try:
-            http_request = requests.get(url, headers=headers)
+            http_request = requests.get(url, headers=headers, params=params)
         except HTTPError as e:
             raise ContentFetchError('HTTP error: %s %s' % (e.response.status_code, e.request.url))
         except RequestException as e:
@@ -187,6 +188,13 @@ class CKANHarvester(HarvesterBase):
             creating or updating the actual package.
         '''
         return package_dict
+
+    def modify_search(self, pkg_dicts, remote_ckan_base_url, fq_terms):
+        '''
+            Allow custom harvesters to modify the list of packages
+            returned by the search function
+        '''
+        return pkg_dicts
 
     def _get_object_extra(self, harvest_object, key):
         '''
@@ -434,6 +442,8 @@ class CKANHarvester(HarvesterBase):
 
             params['start'] = str(int(params['start']) + int(params['rows']))
 
+        pkg_dicts = self.modify_search(pkg_dicts, remote_ckan_base_url, fq_terms)
+
         return pkg_dicts
 
     def fetch_stage(self, harvest_object):
@@ -649,8 +659,4 @@ class ContentNotFoundError(ContentFetchError):
 
 
 class RemoteResourceError(Exception):
-    pass
-
-
-class SearchError(Exception):
     pass
