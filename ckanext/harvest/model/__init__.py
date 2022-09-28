@@ -400,7 +400,7 @@ def define_harvester_tables():
         Column('stage', types.UnicodeText),
         Column('line', types.Integer),
         Column('created', types.DateTime, default=datetime.datetime.utcnow),
-        Index('harvest_object_error_harvest_job_id_idx', 'harvest_job_id'),
+        Index('harvest_object_error_harvest_object_id_idx', 'harvest_object_id'),
     )
     # Harvest Log table
     harvest_log_table = Table(
