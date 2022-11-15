@@ -196,6 +196,13 @@ class CKANHarvester(HarvesterBase):
         '''
         return pkg_dicts
 
+    def modify_remote_organization(self, remote_org_id, pkg_dicts):
+        '''
+            Allow custom harvesters to modify the organization id
+            used to search for or create organizations
+        '''
+        return remote_org_id
+
     def _get_object_extra(self, harvest_object, key):
         '''
         Helper function for retrieving the value from a harvest object extra,
@@ -558,6 +565,8 @@ class CKANHarvester(HarvesterBase):
                 # check if remote org exist locally, otherwise remove
                 validated_org = None
                 remote_org = package_dict['owner_org']
+
+                remote_org = self.modify_remote_organization(remote_org, package_dict)
 
                 if remote_org:
                     try:
