@@ -196,7 +196,7 @@ class CKANHarvester(HarvesterBase):
         '''
         return pkg_dicts
 
-    def modify_remote_organization(self, remote_org_id, pkg_dicts, context):
+    def modify_remote_organization(self, remote_org_id, pkg_dict, context):
         '''
             Allow custom harvesters to modify the organization id
             used to search for or create organizations
