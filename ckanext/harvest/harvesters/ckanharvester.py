@@ -6,7 +6,7 @@ from requests.exceptions import HTTPError, RequestException
 import datetime
 from urllib3.contrib import pyopenssl
 
-from six.moves.urllib.parse import urlencode
+from six.moves.urllib.parse import urlencode, quote_plus
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
@@ -196,6 +196,13 @@ class CKANHarvester(HarvesterBase):
         '''
         return pkg_dicts
 
+    def modify_remote_organization(self, remote_org_id, pkg_dict, context):
+        '''
+            Allow custom harvesters to modify the organization id
+            used to search for or create organizations
+        '''
+        return remote_org_id
+
     def _get_object_extra(self, harvest_object, key):
         '''
         Helper function for retrieving the value from a harvest object extra,
@@ -241,11 +248,11 @@ class CKANHarvester(HarvesterBase):
         field_filter_exclude = self.config.get('field_filter_exclude', [])
         if field_filter_include:
             fq_terms.append(' OR '.join(
-                '%s:%s' % (item['field'], item['value']) for item in field_filter_include
+                '%s:"%s"' % (item['field'], item['value']) for item in field_filter_include
             ))
         elif field_filter_exclude:
             fq_terms.extend(
-                '-%s:%s' % (item['field'], item['value']) for item in field_filter_exclude
+                '-%s:"%s"' % (item['field'], item['value']) for item in field_filter_exclude
             )
 
         # Ideally we can request from the remote CKAN only those datasets
@@ -558,6 +565,8 @@ class CKANHarvester(HarvesterBase):
                 # check if remote org exist locally, otherwise remove
                 validated_org = None
                 remote_org = package_dict['owner_org']
+
+                remote_org = self.modify_remote_organization(remote_org, package_dict, base_context.copy())
 
                 if remote_org:
                     try:

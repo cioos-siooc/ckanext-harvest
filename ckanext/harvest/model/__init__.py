@@ -330,6 +330,7 @@ def define_harvester_tables():
         Column('source_id', types.UnicodeText, ForeignKey('harvest_source.id')),
         # status: New, Running, Finished
         Column('status', types.UnicodeText, default=u'New', nullable=False),
+        Index('harvest_job_source_id_idx', 'source_id'),
     )
     # A harvest_object contains a representation of one dataset during a
     # particular harvest
@@ -387,6 +388,7 @@ def define_harvester_tables():
         Column('harvest_job_id', types.UnicodeText, ForeignKey('harvest_job.id')),
         Column('message', types.UnicodeText),
         Column('created', types.DateTime, default=datetime.datetime.utcnow),
+        Index('harvest_gather_error_harvest_job_id_idx', 'harvest_job_id'),
     )
     # New table
     harvest_object_error_table = Table(
@@ -398,6 +400,7 @@ def define_harvester_tables():
         Column('stage', types.UnicodeText),
         Column('line', types.Integer),
         Column('created', types.DateTime, default=datetime.datetime.utcnow),
+        Index('harvest_object_error_harvest_object_id_idx', 'harvest_object_id'),
     )
     # Harvest Log table
     harvest_log_table = Table(
