@@ -18,6 +18,8 @@ from ckanext.harvest.model import HarvestObject
 from ckanext.harvest.model import HarvestObjectExtra as HOExtra
 from .base import HarvesterBase
 
+import collections
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -238,21 +240,25 @@ class CKANHarvester(HarvesterBase):
         groups_filter_include = self.config.get('groups_filter_include', [])
         groups_filter_exclude = self.config.get('groups_filter_exclude', [])
         if groups_filter_include:
-            fq_terms.append(' OR '.join(
-                'groups:%s' % group_name for group_name in groups_filter_include))
+            fq_terms.append('groups:(%s)' % ' OR '.join(groups_filter_include))
         elif groups_filter_exclude:
-            fq_terms.extend(
-                '-groups:%s' % group_name for group_name in groups_filter_exclude)
+            fq_terms.append('-groups:(%s)' % ' OR '.join(groups_filter_include))
 
         field_filter_include = self.config.get('field_filter_include', [])
         field_filter_exclude = self.config.get('field_filter_exclude', [])
         if field_filter_include:
+            result = collections.defaultdict(list)
+            for item in field_filter_include:
+                result[item['field']].append(item['value'])
             fq_terms.append(' OR '.join(
-                '%s:"%s"' % (item['field'], item['value']) for item in field_filter_include
+                '%s:(%s)' % (key, ' OR '.join(result[key])) for key in result.keys()
             ))
         elif field_filter_exclude:
+            result = collections.defaultdict(list)
+            for item in field_filter_exclude:
+                result[item['field']].append(item['value'])
             fq_terms.extend(
-                '-%s:"%s"' % (item['field'], item['value']) for item in field_filter_exclude
+                '-%s:(%s)' % (key, ' OR '.join(result[key])) for key in result.keys()
             )
 
         # Ideally we can request from the remote CKAN only those datasets
