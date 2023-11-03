@@ -51,6 +51,7 @@
           {% if ckan_version | int >= 9 %}
             {{ h.build_nav_icon(c.dataset_type ~ '.read', _('Datasets'), id=harvest_source.name, icon='sitemap') }}
             {{ h.build_nav_icon('harvester.about', _('About'), id=harvest_source.name, icon='info-sign') }}
+            {{ h.build_nav_icon('harvest.activity', _('Activity Stream'), id=harvest_source.name) }}
           {% else %}
             {{ h.build_nav_icon('{0}_read'.format(c.dataset_type), _('Datasets'), id=harvest_source.name, icon='sitemap') }}
             {{ h.build_nav_icon('{0}_about'.format(c.dataset_type), _('About'), id=harvest_source.name, icon='info-sign') }}
