@@ -1,12 +1,10 @@
 from __future__ import absolute_import
-import six
 import requests
 from requests.exceptions import HTTPError, RequestException
 
 import datetime
-from urllib3.contrib import pyopenssl
 
-from six.moves.urllib.parse import urlencode, quote_plus
+from urllib.parse import urlencode
 from ckan import model
 from ckan.logic import ValidationError, NotFound, get_action
 from ckan.lib.helpers import json
@@ -42,11 +40,14 @@ class CKANHarvester(HarvesterBase):
     def _get_content(self, url, params={}):
 
         headers = {}
+
+        user_agent = self.config.get('user_agent')
+        if user_agent:
+            headers['User-Agent'] = str(user_agent)
+
         api_key = self.config.get('api_key')
         if api_key:
             headers['Authorization'] = api_key
-
-        pyopenssl.inject_into_urllib3()
 
         try:
             http_request = requests.get(url, headers=headers, params=params)
@@ -127,8 +128,7 @@ class CKANHarvester(HarvesterBase):
                     raise ValueError('default_groups must be a *list* of group'
                                      ' names/ids')
                 if config_obj['default_groups'] and \
-                        not isinstance(config_obj['default_groups'][0],
-                                       six.string_types):
+                        not isinstance(config_obj['default_groups'][0], str):
                     raise ValueError('default_groups must be a list of group '
                                      'names/ids (i.e. strings)')
 
@@ -629,7 +629,7 @@ class CKANHarvester(HarvesterBase):
                     if existing_extra:
                         package_dict['extras'].remove(existing_extra)
                     # Look for replacement strings
-                    if isinstance(value, six.string_types):
+                    if isinstance(value, str):
                         value = value.format(
                             harvest_source_id=harvest_object.job.source.id,
                             harvest_source_url=harvest_object.job.source.url.strip('/'),
